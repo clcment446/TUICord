@@ -1,0 +1,160 @@
+// =============================================================
+// build.gradle – discord-bot (thunder-shaking-bird)
+// Merged from legacy build + new Javalin / REST layer.
+// =============================================================
+
+plugins {
+    id 'java'
+    id 'application'
+    id 'org.jetbrains.kotlin.jvm' version '1.9.22'
+    id 'com.gradleup.shadow' version '9.4.1'
+}
+
+// ── coordinates (carried over from legacy) ─────────────────────
+group = 'com.c446'
+version = '1.0-SHADOW'
+
+// ── Java / Kotlin target ───────────────────────────────────────
+// Legacy was 21; kept to avoid any subtle bytecode-level breakage
+// with existing Kotlin code.
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+compileKotlin {
+    kotlinOptions { jvmTarget = '21' }
+}
+compileTestKotlin {
+    kotlinOptions { jvmTarget = '21' }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// ── entry point ────────────────────────────────────────────────
+application {
+    mainClass.set('bot.DiscordBot')
+}
+
+// ── repositories ───────────────────────────────────────────────
+repositories {
+    mavenCentral()
+    // JDA releases (kept for compatibility; stable JDA also on Central)
+    maven {
+        name 'm2-dv8tion'
+        url 'https://m2.dv8tion.net/releases'
+    }
+    // JDA Chewtils
+    maven {
+        name 'chew-pro'
+        url 'https://m2.chew.pro/releases'
+    }
+}
+
+// ── dependencies ───────────────────────────────────────────────
+dependencies {
+
+    // ─── Discord ──────────────────────────────────────────────
+    // 5.28.0 is the latest stable on the new group ID (net.discord-jda).
+    // Legacy used net.dv8tion:JDA:6.0.0-rc.3 which was a pre-release
+    // under the old group.  If you need that exact RC, swap back.
+    implementation 'net.dv8tion:JDA:6.3.0'
+
+    // Chewtils – utility layer the legacy bot depended on.
+    // Pulled from chew.pro maven repo above.
+    implementation 'pw.chew:jda-chewtils:2.1'
+
+    // ─── REST API ─────────────────────────────────────────────
+    implementation 'io.javalin:javalin:6.3.0'
+    implementation("io.javalin.community.ssl:ssl-plugin:6.7.0")
+
+    // ─── Database ─────────────────────────────────────────────
+    // mysql-connector-java 9.x is the current official artifact
+    // (replaces the deprecated mysql:mysql-connector-java 8.x group).
+    implementation 'com.mysql:mysql-connector-j:9.6.0'
+    implementation("com.zaxxer:HikariCP:7.0.2")
+
+    // ─── Serialization ────────────────────────────────────────
+    implementation 'com.google.code.gson:gson:2.13.0'
+
+    // ─── HTTP client ──────────────────────────────────────────
+    // JDA bundles OkHttp internally, but legacy code may use it
+    // directly.  Pin to a version that is compatible with JDA 5.x.
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
+    // ─── Logging ──────────────────────────────────────────────
+    // 2.x line; wire-compatible with existing logback.xml config.
+//    implementation 'org.slf4j:slf4j-api:2.0.16'
+    implementation("org.slf4j:slf4j-simple:2.0.16")
+    //implementation 'ch.qos.logback:logback-classic:2.0.16'
+
+    // ─── Config ───────────────────────────────────────────────
+    // Source: https://mvnrepository.com/artifact/io.github.cdimascio/dotenv-java
+    implementation("io.github.cdimascio:dotenv-java:3.2.0")
+
+    // ─── Kotlin stdlib ────────────────────────────────────────
+    // The kotlin.jvm plugin auto-adds kotlin-stdlib at the plugin
+    // version (1.9.22).  kotlin-stdlib-jdk8 was merged into
+    // kotlin-stdlib in 1.8, so it is intentionally omitted.
+}
+
+// ── shadow (fat) JAR ───────────────────────────────────────────
+// This replaces the old naive jar task.  `./gradlew shadowJar`
+// produces a single runnable JAR with all deps baked in.
+shadowJar {
+    archiveBaseName = 'thunder-shaking-bird'
+    archiveClassifier = ''                          // no "-all" suffix
+    manifest {
+        attributes(
+                'Main-Class': application.mainClass.get()
+        )
+    }
+
+}
+
+tasks.register('kill_distant') {
+    group = ' deployment'
+    description = 'stops the distant server'
+
+    doLast {
+        def remoteHost = "tsb"
+        exec {
+            executable('ssh')
+            args remoteHost, "systemctl stop tsb"
+        }
+    }
+}
+
+tasks.register('deploy') {
+    group = 'deployment'
+    description = 'Cleans, builds, uploads to /root, and restarts the bot.'
+
+    dependsOn tasks.named('clean'), tasks.named('shadowJar')
+
+    doLast {
+        def jarFile = tasks.shadowJar.archiveFile.get().asFile
+        def remoteHost = "tsb"
+        def remotePath = "/root/bot/thunder-shaking-bird.jar" // Target root home
+
+        println "📦 Syncing to /root/ via scp..."
+        exec {
+            executable 'scp'
+            args jarFile.absolutePath, "${remoteHost}:${remotePath}"
+        }
+
+        println "🔄 Restarting service..."
+        exec {
+            executable 'ssh'
+            args remoteHost, "systemctl restart tsb"
+        }
+
+        println "🚀 Done! Tail logs with: ssh tsb tail -f /root/bot.log"
+    }
+}
+
+// ── tests ──────────────────────────────────────────────────────
+test {
+    useJUnitPlatform()
+}

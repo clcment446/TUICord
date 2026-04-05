@@ -1,0 +1,50 @@
+# docker-compose.yml
+# Spin up a throwaway MySQL 8 instance for local development.
+#
+#   docker compose up -d
+#   # … run the bot with ./gradlew run …
+#   docker compose down          # stop
+#   docker compose down -v       # stop + nuke data
+#
+# The init/ directory is mounted read-only so the schema SQL runs
+# automatically on first container start.
+
+version: "3.8"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: discord-bot-mysql
+
+    environment:
+      # Root password (dev only – never use in production)
+      MYSQL_ROOT_PASSWORD: rootdev
+      # Database & user that match .env defaults
+      MYSQL_DATABASE:      discord_bot
+      MYSQL_USER:          discord_app
+      MYSQL_PASSWORD:      change_me_in_production
+    command:
+      - "--innodb-buffer-pool-size=256M"
+      - "--innodb-log-buffer-size=16M"
+      - "--max-connections=20"
+      - "--performance-schema=OFF" # Saves a massive amount of RAM on small servers
+
+    ports:
+      # host:container  –  3306 is the standard MySQL port
+      - "3306:3306"
+
+    volumes:
+      # ── schema seed (runs once on first start) ──
+      - ./scripts/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+      # ── persistent data (survives container restart) ──
+      - mysql_data:/var/lib/mysql
+
+    # Healthcheck so dependant services know when it's ready
+    healthcheck:
+      test:   ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootdev"]
+      interval: 5s
+      timeout:  3s
+      retries:  5
+
+volumes:
+  mysql_data:
