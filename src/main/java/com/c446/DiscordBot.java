@@ -1,67 +1,81 @@
 package com.c446;
 
+import com.c446.db.DBMan;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Activity;
-
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Application entry point.
- *
- * <p>Startup order (intentional):</p>
- * <ol>
- *   <li>Load config / .env  – fail fast on missing secrets.</li>
- *   <li>Warm the DB pool    – verifies connectivity before Discord login.</li>
- *   <li>Start the REST API  – Javalin is up before we need it.</li>
- *   <li>Login to Discord    – last, because it requires everything else.</li>
- * </ol>
  */
 public class DiscordBot {
 
     private static final Logger LOG = LoggerFactory.getLogger(DiscordBot.class);
 
+    public static JDA jda = null;
+
     public static void main(String[] args) {
 
-
-        // ── 4. JDA / Discord ───────────────────────────────────
         try {
-            JDA jda = JDABuilder.createDefault(config.discordToken())
-                    // ── activity ────────────────────────────────
-                    .setActivity(Activity.playing("/ping | /user"))
+            // ── 1. Load Config ─────────────────────────────────────
+            // Config class static initializer runs as soon as we touch it.
+            LOG.info("Loading configuration for port {}...", Config.API_PORT);
 
-                    // ── event listeners ─────────────────────────
-                    .addEventListeners(
-                            new CommandHandler(),
-                            new BadersoBot()
+            // ── 2. Warm the DB Pool ────────────────────────────────
+            LOG.info("Initializing Database Pool...");
+            // This triggers the Hikari static block and runs table creation
+
+            // ── 3. Start the REST API ──────────────────────────────
+            LOG.info("Starting Javalin API Server...");
+            // apiServer.start(Config.API_PORT); // Assuming your apiServer instance is here
+
+            // ── 4. JDA / Discord Login ─────────────────────────────
+            LOG.info("Logging into Discord...");
+            DiscordBot.jda = JDABuilder.createDefault(Config.DISCORD_TOKEN)
+                    .setActivity(Activity.playing("/ping | /user"))
+                    .enableIntents(
+                            GatewayIntent.GUILD_MEMBERS,
+                            GatewayIntent.GUILD_EXPRESSIONS,
+                            GatewayIntent.GUILD_MESSAGES,
+                            GatewayIntent.GUILD_MESSAGE_REACTIONS,
+                            GatewayIntent.MESSAGE_CONTENT
                     )
-                    .enableIntents(GatewayIntent.GUILD_MEMBERS, GatewayIntent.GUILD_EXPRESSIONS, GatewayIntent.GUILD_MESSAGES, GatewayIntent.GUILD_MESSAGE_REACTIONS, GatewayIntent.MESSAGE_CONTENT)
-                    // ── build & await ready ─────────────────────
                     .build()
                     .awaitReady();
 
-            // ── upsert slash commands with Discord ──────────────
+            // Register Commands
             jda.updateCommands()
-                    .addCommands(CommandHandler.getSlashCommands())
+//                    .addCommands(CommandHandler.getSlashCommands())
                     .queue();
 
             LOG.info("Discord bot is online. Slash commands registered.");
 
-            // ── graceful shutdown hook ──────────────────────────
+            // ── Graceful Shutdown Hook ──────────────────────────
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                LOG.info("Shutting down…");
+                LOG.info("Shutdown signal received. Cleaning up...");
+
+                // 1. Stop JDA first to stop receiving new events
                 jda.shutdown();
-                apiServer.stop();
-                DatabasePool.getInstance().close();
-                LOG.info("Shutdown complete.");
+
+                // 2. Stop API server
+                // apiServer.stop();
+
+                // 3. Close DB Pool last
+                DBMan.shutdown();
+
+                LOG.info("Shutdown complete. Goodbye!");
             }));
 
         } catch (Exception e) {
-            LOG.error("Failed to start Discord bot", e);
-            apiServer.stop();
-            DatabasePool.getInstance().close();
+            LOG.error("FATAL: Failed to start application", e);
+
+            // Emergency Cleanup
+            // if (apiServer != null) apiServer.stop();
+            DBMan.shutdown();
+
             System.exit(1);
         }
     }

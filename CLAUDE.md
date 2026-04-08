@@ -34,29 +34,50 @@ automatically on disconnect.
 - Handle and dispatch the following events:
     - `MessageReceivedEvent`, `MessageUpdateEvent`, `MessageDeleteEvent`
     - `GuildMessageReactionAddEvent`, `GuildMessageReactionRemoveEvent`
-    - `GuildJoinEvent`, `GuildLeaveEvent`, `GuildMemberJoinEvent`, `GuildMemberRemoveEvent`
+    - `GuildJoinEvent`, `GuildLeaveEvent`, `GuildMemberJoinEvent`, `GuildMemberRemoveEvent`, `GuildMemberUpdateEvent`
+    - `RoleCreateEvent`, `RoleUpdateEvent`, `RoleDeleteEvent`
     - `ChannelCreateEvent`, `ChannelDeleteEvent`, `ChannelUpdateEvent`
-    - `UserTypingEvent`, `GuildMemberUpdateEvent`
+    - `UserTypingEvent`
 - Log and recover from gateway errors without crashing the process.
 - Emit all events to connected TUI clients via WebSocket/SSE.
 
-### 2.2 Persistence & Message Cache
+### 2.2 Persistence & Caching Philosophy
 
-Database schema (SQLite or PostgreSQL — configurable):
+**What gets persisted to MySQL:**
 
-```
-guilds        (id, name, icon_url, joined_at)
-channels      (id, guild_id, name, type, position)
-members       (id, guild_id, username, display_name, roles, joined_at)
-messages      (id, channel_id, author_id, content, timestamp, edited_at, deleted)
-attachments   (id, message_id, url, filename, size)
-reactions     (message_id, emoji, count, user_ids)
-```
+| Table                          | Why it's cached                                                                                                  |
+|--------------------------------|------------------------------------------------------------------------------------------------------------------|
+| `guilds`                       | Identity anchor for channels and messages — name + icon only                                                     |
+| `channels`                     | Identity anchor for messages — name and type only                                                                |
+| `users`                        | Message author display without a JDA call — username, global_name, avatar only                                   |
+| `roles`                        | Needed to make `guild_member_roles` history readable after a role is deleted; soft-deleted with `deleted = TRUE` |
+| `guild_member_roles`           | Historical log of role assignments — `assigned_at` + `removed_at`; the only member state in the DB               |
+| `messages`                     | Core feature — full content, soft-deleted, FTS-indexed                                                           |
+| `message_edits`                | Append-only edit history — one row per edit, content before the edit, idempotent on reconnect                    |
+| `attachments`                  | Part of message history                                                                                          |
+| `reactions` / `reaction_users` | Part of message history                                                                                          |
+| `scripts` / `script_runs`      | Script registry and execution audit log                                                                          |
 
-- On startup, backfill recent messages per channel (configurable limit, e.g. last 200).
-- Write-through cache: every incoming Discord event updates the DB immediately.
-- Soft-delete messages (`deleted = true`) rather than removing rows.
-- Index `messages(channel_id, timestamp)` and enable FTS (SQLite FTS5 or PostgreSQL `tsvector`) on `content`.
+**What is intentionally NOT persisted (read from JDA at runtime):**
+
+- Member profiles: nickname, guild avatar, guild banner, guild bio, boost status, timeout state
+- Presence and online status
+- Voice state
+- Typing indicators
+- Channel metadata: topic, position, slowmode, permission overwrites
+- Guild metadata: owner, member count, features, boost tier
+- Computed/effective permissions (resolve from `roles.permissions` bitfield via JDA)
+
+**Write rules:**
+
+- Write-through: every relevant Discord event updates the DB immediately.
+- `guild_member_roles` is a log, not a current-state table. On `GuildMemberRoleAddEvent`: INSERT a new row. On
+  `GuildMemberRoleRemoveEvent`: UPDATE `removed_at` on the open row (`removed_at IS NULL`).
+- Roles deleted from Discord: set `roles.deleted = TRUE` rather than removing the row — historical assignments must
+  remain readable.
+- Soft-delete messages (`deleted = TRUE`, `deleted_at = now()`).
+- FTS on `messages.content` via MySQL `FULLTEXT` index with `ngram` parser.
+- On startup, backfill recent messages per channel (configurable, e.g. last 200).
 
 ### 2.3 API Layer
 
@@ -64,18 +85,23 @@ Expose a local API for the TUI client. Prefer **WebSocket** for events + **REST*
 
 **REST endpoints:**
 
-| Method   | Path                                    | Description                 |
-|----------|-----------------------------------------|-----------------------------|
-| `GET`    | `/guilds`                               | List all cached guilds      |
-| `GET`    | `/guilds/:id/channels`                  | List channels for a guild   |
-| `GET`    | `/channels/:id/messages?limit=&before=` | Paginated message history   |
-| `POST`   | `/channels/:id/messages`                | Send a message              |
-| `POST`   | `/channels/:id/typing`                  | Trigger typing indicator    |
-| `GET`    | `/search?q=&guild=&channel=&limit=`     | Full-text search            |
-| `POST`   | `/guilds/join`                          | Join a guild by invite code |
-| `POST`   | `/guilds/:id/leave`                     | Leave a guild               |
-| `DELETE` | `/messages/:id`                         | Delete a message            |
-| `PATCH`  | `/messages/:id`                         | Edit a message              |
+| Method   | Path                                    | Description                                                 |
+|----------|-----------------------------------------|-------------------------------------------------------------|
+| `GET`    | `/guilds`                               | List guilds (names from DB, live metadata from JDA)         |
+| `GET`    | `/guilds/:id/channels`                  | List channels for a guild                                   |
+| `GET`    | `/guilds/:id/roles`                     | List roles for a guild (from JDA; DB used only for history) |
+| `GET`    | `/guilds/:id/members?limit=&after=`     | Live member list from JDA                                   |
+| `GET`    | `/channels/:id/messages?limit=&before=` | Paginated message history from DB                           |
+| `POST`   | `/channels/:id/messages`                | Send a message                                              |
+| `POST`   | `/channels/:id/typing`                  | Trigger typing indicator                                    |
+| `GET`    | `/messages/:id/edits`                   | Full edit history (from DB, ordered by revision ASC)        |
+| `GET`    | `/search?q=&guild=&channel=&limit=`     | Full-text search across cached messages                     |
+| `GET`    | `/users/:id`                            | Minimal identity from DB; live profile fields from JDA      |
+| `GET`    | `/users/:id/roles?guild=`               | Historical role assignments from `guild_member_roles`       |
+| `POST`   | `/guilds/join`                          | Join a guild by invite code                                 |
+| `POST`   | `/guilds/:id/leave`                     | Leave a guild                                               |
+| `DELETE` | `/messages/:id`                         | Delete a message                                            |
+| `PATCH`  | `/messages/:id`                         | Edit a message                                              |
 
 **WebSocket events (server → client):**
 
@@ -84,7 +110,8 @@ MESSAGE_CREATE, MESSAGE_UPDATE, MESSAGE_DELETE
 REACTION_ADD, REACTION_REMOVE
 TYPING_START
 GUILD_UPDATE, CHANNEL_UPDATE
-MEMBER_JOIN, MEMBER_LEAVE
+MEMBER_JOIN, MEMBER_LEAVE, MEMBER_UPDATE
+ROLE_CREATE, ROLE_UPDATE, ROLE_DELETE
 ```
 
 ### 2.4 Resilience (99% Uptime)
@@ -99,7 +126,35 @@ Because the backend runs indefinitely:
 - Expose a `/health` endpoint returning uptime, gateway status, DB connection status, and connected client count.
 - Rate limit Discord API calls defensively — never rely on Discord's 429 response as the primary throttle.
 
----
+### 2.5 MessageUpdateEvent Write Pattern
+
+`MessageUpdateEvent` must be handled atomically to keep `messages` and `message_edits` consistent:
+
+```
+ON MessageUpdateEvent(event):
+  existing = SELECT content, edit_count FROM messages WHERE id = event.messageId
+  IF existing.content != event.newContent:          -- ignore no-op updates (embed resolution, etc.)
+    BEGIN TRANSACTION
+      INSERT INTO message_edits
+        (message_id, revision, content, edited_at)
+      VALUES
+        (event.messageId, existing.edit_count + 1, existing.content, event.editedAt)
+      ON DUPLICATE KEY IGNORE                        -- idempotency guard on reconnect replay
+
+      UPDATE messages
+        SET content    = event.newContent,
+            edited_at  = event.editedAt,
+            edit_count = edit_count + 1
+        WHERE id = event.messageId
+    COMMIT
+    EMIT MESSAGE_UPDATE to connected clients
+```
+
+- The `UNIQUE KEY (message_id, revision)` on `message_edits` makes duplicate inserts safe on gateway reconnect.
+- A no-content update (e.g. Discord resolving a link embed) must **not** increment `edit_count` or create a
+  `message_edits` row.
+- The TUI displays `(edited)` next to any message where `edit_count > 0`. Pressing `e` on a message fetches
+  `/messages/:id/edits` and renders the full revision timeline inline.
 
 ## 3. Client (Python TUI)
 
@@ -122,11 +177,14 @@ Use `textual` (preferred) or `urwid` for layout. Avoid raw `curses` unless neces
 
 - Guild and channel navigation (keyboard-driven, vim-style: `j/k`, `g/G`, `Enter`).
 - Message scrolling with lazy loading (request older pages as user scrolls up).
-- Mention highlighting (`@username` in accent color).
+- Mention highlighting (`@username` in accent color, tinted by the user's highest hoisted role color).
 - Inline display of reactions with counts.
 - Typing indicator shown in message view footer.
-- Command bar (`:` prefix) for actions: `:join <invite>`, `:leave`, `:search <query>`, `:script <name>`.
+- Command bar (`:` prefix) for actions: `:join <invite>`, `:leave`, `:search <query>`, `:script <n>`.
 - Unread indicators per channel.
+- Edited messages marked with `(edited)` suffix; press `e` on a focused message to expand the full revision timeline
+  inline, fetched from `/messages/:id/edits`.
+- Member profile popover on `p`: shows global avatar/bio merged with guild-specific nick/avatar/bio and role list.
 
 ### 3.3 Backend Communication
 
