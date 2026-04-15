@@ -1,4 +1,4 @@
-package com.c446.db;
+package com.c446.db.handlers;
 
 import com.c446.db.repositories.ChannelRepository;
 import com.c446.db.repositories.GuildRepository;
