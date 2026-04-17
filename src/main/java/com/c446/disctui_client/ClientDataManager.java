@@ -373,9 +373,6 @@ public class ClientDataManager {
             return;
         }
         commandResultLines = result.lines().toList();
-        if (commandResultLines.isEmpty()) {
-            commandResultLines = List.of(result);
-        }
         resultScrollOffset = 0;
         resultMode = true;
         frameFocus = FrameFocus.CHAT;

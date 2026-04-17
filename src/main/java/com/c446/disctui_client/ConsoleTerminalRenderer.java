@@ -126,6 +126,7 @@ public class ConsoleTerminalRenderer implements TerminalRenderer {
             Method method = keyMap.getClass().getMethod("setAmbiguousTimeout", long.class);
             method.invoke(keyMap, 10L);
         } catch (Exception ignored) {
+            // Best-effort compatibility: older/different JLine keymap implementations may not expose this method.
         }
     }
 }
