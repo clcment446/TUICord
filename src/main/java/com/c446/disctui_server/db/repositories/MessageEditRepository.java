@@ -9,6 +9,7 @@ import java.sql.*;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 public class MessageEditRepository extends AbstractRepository<MessageEditEntity, Long> {
@@ -42,6 +43,11 @@ public class MessageEditRepository extends AbstractRepository<MessageEditEntity,
         }
     }
 
+    /**
+     * Inserts an edit snapshot and falls back to canonical structured content
+     * from {@link MessageHandler#toMessageEntity(Message)} when the edit content
+     * is missing/blank.
+     */
     public void insertEdit(MessageEditEntity edit, Message sourceMessage) throws Exception {
         if (edit == null) {
             return;
@@ -49,6 +55,10 @@ public class MessageEditRepository extends AbstractRepository<MessageEditEntity,
         String content = edit.content;
         if ((content == null || content.isBlank()) && sourceMessage != null) {
             content = MessageHandler.toMessageEntity(sourceMessage).content;
+        }
+        if (Objects.equals(content, edit.content)) {
+            insertEdit(edit);
+            return;
         }
         insertEdit(new MessageEditEntity(edit.messageId, edit.revision, content, edit.editedAt));
     }

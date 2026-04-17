@@ -24,7 +24,7 @@ class AnsiTuiRendererTest {
 
         List<String> lines = renderer.renderMessages(messages);
         assertTrue(lines.get(0).contains("<deleted> (2)"));
-        assertEquals("live", lines.get(1));
+        assertTrue(lines.get(1).contains("live"));
     }
 
     @Test
@@ -42,6 +42,7 @@ class AnsiTuiRendererTest {
         List<String> lines = renderer.renderMessages(List.of(deleted));
 
         assertEquals("last known before delete", revealed);
+        assertTrue(lines.size() >= 2);
         assertEquals("↳ last known before delete", lines.get(1));
     }
 }

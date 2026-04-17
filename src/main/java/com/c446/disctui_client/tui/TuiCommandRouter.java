@@ -12,10 +12,13 @@ public class TuiCommandRouter {
         this.dataManager = dataManager;
     }
 
-    public Optional<String> onKeyPress(char key, TuiMessage focusedMessage) {
+    /**
+     * Shift+H (uppercase H) reveals history only for deleted messages.
+     */
+    public Optional<String> onKeyPress(char key, TuiMessage message) {
         if (key != 'H') {
             return Optional.empty();
         }
-        return dataManager.getLastKnownState(focusedMessage);
+        return dataManager.getLastKnownStateForDeletedMessage(message);
     }
 }

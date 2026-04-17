@@ -11,18 +11,19 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ClientDataManager {
+    private static final Comparator<MessageEditEntity> BY_REVISION = Comparator.comparingInt(e -> e.revision);
 
     private final Map<Long, List<MessageEditEntity>> editsByMessageId = new ConcurrentHashMap<>();
 
     public void putEditHistory(long messageId, List<MessageEditEntity> edits) {
         List<MessageEditEntity> copy = new ArrayList<>(edits);
-        copy.sort(Comparator.comparingInt(e -> e.revision));
+        sortEdits(copy);
         editsByMessageId.put(messageId, copy);
     }
 
     public void addEdit(MessageEditEntity edit) {
         editsByMessageId.computeIfAbsent(edit.messageId, ignored -> new ArrayList<>()).add(edit);
-        editsByMessageId.get(edit.messageId).sort(Comparator.comparingInt(e -> e.revision));
+        sortEdits(editsByMessageId.get(edit.messageId));
     }
 
     public Optional<String> getLastKnownState(long messageId) {
@@ -33,10 +34,14 @@ public class ClientDataManager {
         return Optional.ofNullable(edits.get(edits.size() - 1).content);
     }
 
-    public Optional<String> getLastKnownState(TuiMessage message) {
+    public Optional<String> getLastKnownStateForDeletedMessage(TuiMessage message) {
         if (message == null || !message.deleted()) {
             return Optional.empty();
         }
         return getLastKnownState(message.id());
+    }
+
+    private static void sortEdits(List<MessageEditEntity> edits) {
+        edits.sort(BY_REVISION);
     }
 }

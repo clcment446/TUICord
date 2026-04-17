@@ -43,7 +43,7 @@ public class MessageHandler extends ListenerAdapter {
             msg.deleted = false;
 
             msg.editedAt = null;
-            msg.editCount=0;
+            msg.editCount = 0;
 
             messageRepo.save(msg);
 
@@ -113,6 +113,19 @@ public class MessageHandler extends ListenerAdapter {
         }
     }
 
+    /**
+     * Builds a {@link MessageEntity} from a JDA message, with a canonical JSON payload in
+     * {@code MessageEntity.content}:
+     * <pre>
+     * {
+     *   "raw": "...",
+     *   "embeds": [...],
+     *   "attachments": [...]
+     * }
+     * </pre>
+     * This keeps edit history and deleted-state reveals faithful to the original
+     * message structure, including embed and attachment text.
+     */
     public static MessageEntity toMessageEntity(@NotNull Message message) {
         JsonObject content = new JsonObject();
         content.addProperty("raw", message.getContentRaw());

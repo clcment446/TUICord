@@ -8,6 +8,7 @@ public record TuiMessage(
         boolean deleted
 ) {
     public String collapseContextKey() {
-        return channelId + ":" + (author == null ? "" : author);
+        String safeAuthor = author == null ? "" : author;
+        return channelId + "|" + safeAuthor.length() + "|" + safeAuthor;
     }
 }

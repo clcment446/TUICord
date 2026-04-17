@@ -15,7 +15,7 @@ public class AnsiTuiRenderer {
     private final Map<Long, String> revealedDeletedStates = new LinkedHashMap<>();
 
     public Optional<String> handleShiftH(TuiMessage focusedMessage, ClientDataManager dataManager) {
-        Optional<String> lastKnown = dataManager.getLastKnownState(focusedMessage);
+        Optional<String> lastKnown = dataManager.getLastKnownStateForDeletedMessage(focusedMessage);
         lastKnown.ifPresent(content -> revealedDeletedStates.put(focusedMessage.id(), content));
         return lastKnown;
     }
@@ -51,7 +51,6 @@ public class AnsiTuiRenderer {
                 String revealed = revealedDeletedStates.get(grouped.id());
                 if (revealed != null) {
                     out.add("↳ " + revealed);
-                    break;
                 }
             }
 
