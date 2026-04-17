@@ -124,6 +124,10 @@ public class AnsiTuiRenderer {
     }
 
     private List<String> buildChat(ClientDataManager state, int width, int rows) {
+        if (state.isResultMode()) {
+            return buildResultView(state, width, rows);
+        }
+
         List<String> out = new ArrayList<>();
         String chatFocus = state.getFrameFocus() == FrameFocus.CHAT ? color(90, 255, 180) + " [focus]" + RESET : "";
         out.add(fitLine(color(160, 160, 160) + bold("Chat") + RESET + chatFocus, width));
@@ -193,12 +197,30 @@ public class AnsiTuiRenderer {
         return fitRows(out, rows, width);
     }
 
+    private List<String> buildResultView(ClientDataManager state, int width, int rows) {
+        List<String> out = new ArrayList<>();
+        String chatFocus = state.getFrameFocus() == FrameFocus.CHAT ? color(90, 255, 180) + " [focus]" + RESET : "";
+        out.add(fitLine(color(255, 210, 130) + bold("Result mode") + RESET + chatFocus, width));
+
+        List<String> visible = state.getVisibleResultLines(Math.max(0, rows - 2));
+        for (String line : visible) {
+            if (line == null || line.isEmpty()) {
+                out.add(fitLine("", width));
+            } else {
+                out.addAll(wrap(line, width));
+            }
+        }
+
+        out.add(fitLine(dim("↑/↓ scroll result  Send text or run a new command to exit"), width));
+        return fitRows(out, rows, width);
+    }
+
     private List<String> buildCommandFrame(ClientDataManager state, String inputDraft, int width, int rows) {
         List<String> out = new ArrayList<>();
         String status = state.getStatus();
         out.add(fitLine(dim(status == null || status.isBlank() ? "Ready." : status), width));
         out.add(fitLineNoPad(color(200, 200, 200) + "> " + inputDraft + RESET, width));
-        out.add(fitLine(dim("Arrows navigate focus/scroll  Ctrl+E/Alt+E emoji  /keybinds /help /goto /guilds /channels /dms /clear /collapse"), width));
+        out.add(fitLine(dim("Arrows navigate/scroll  Ctrl+E/Alt+E emoji  /keybinds /help /goto /guilds /channels /dms /clear /collapse"), width));
         return fitRows(out, rows, width);
     }
 
@@ -350,4 +372,3 @@ public class AnsiTuiRenderer {
         return new int[]{normalizedWidth, normalizedHeight};
     }
 }
-

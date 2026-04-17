@@ -59,5 +59,25 @@ class ClientDataManagerTest {
         assertEquals("hello world", deleted.content());
         assertFalse(deleted.avatarUrl() == null || deleted.avatarUrl().isBlank());
     }
-}
 
+    @Test
+    void showCommandResultEnablesResultModeAndReturnsVisibleSlice() {
+        ClientDataManager state = new ClientDataManager();
+        state.showCommandResult("line1\nline2\nline3");
+
+        assertTrue(state.isResultMode());
+        assertEquals(List.of("line1", "line2"), state.getVisibleResultLines(2));
+    }
+
+    @Test
+    void resultModeUpDownNavigationScrollsResultLines() {
+        ClientDataManager state = new ClientDataManager();
+        state.showCommandResult("line1\nline2\nline3");
+
+        state.navigateDown();
+        assertEquals(List.of("line2", "line3"), state.getVisibleResultLines(2));
+
+        state.navigateUp();
+        assertEquals(List.of("line1", "line2"), state.getVisibleResultLines(2));
+    }
+}

@@ -90,6 +90,7 @@ public class Master {
                 }
 
                 if (line.startsWith("/nav ")) {
+                    dataManager.clearCommandResult();
                     handleNavigation(line.substring("/nav ".length()).trim(), dataManager, socketClient);
                     currentDraft.set("");
                     int[] size = resolveTerminalSize(terminal);
@@ -101,6 +102,7 @@ public class Master {
                     CommandResult result = COMMAND_ROUTER.route(line, dataManager);
                     if (result.status() != null && !result.status().isBlank()) {
                         dataManager.setStatus(result.status());
+                        dataManager.showCommandResult(result.status());
                     }
                     if (result.channelToSendTo() != null) {
                         try {
@@ -116,6 +118,7 @@ public class Master {
                 }
 
                 if (line.startsWith("/channel ")) {
+                    dataManager.clearCommandResult();
                     String channelIdToken = line.substring("/channel ".length()).trim();
                     handleChannelSelection(channelIdToken, socketClient, dataManager);
                     currentDraft.set("");
@@ -125,6 +128,7 @@ public class Master {
                 }
 
                 if (line.startsWith("/send ")) {
+                    dataManager.clearCommandResult();
                     String message = line.substring("/send ".length()).trim();
                     sendMessage(socketClient, dataManager, message);
                     currentDraft.set("");
@@ -134,6 +138,7 @@ public class Master {
                 }
 
                 if (line.startsWith("/")) {
+                    dataManager.clearCommandResult();
                     dataManager.setStatus("Unknown command. Supported: /goto, /guilds, /channels, /dms, /clear, /collapse, /keybinds, /help, /channel, /send, /quit");
                     currentDraft.set("");
                     int[] size = resolveTerminalSize(terminal);
@@ -142,6 +147,7 @@ public class Master {
                 }
 
                 // Default command behavior: plain text is equivalent to /send <text>.
+                dataManager.clearCommandResult();
                 sendMessage(socketClient, dataManager, line);
                 currentDraft.set("");
                 int[] size = resolveTerminalSize(terminal);
