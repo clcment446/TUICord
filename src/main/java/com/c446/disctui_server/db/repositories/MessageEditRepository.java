@@ -1,7 +1,9 @@
 package com.c446.db.repositories;
 
 import com.c446.db.AbstractRepository;
+import com.c446.db.handlers.MessageHandler;
 import com.c446.db.model.MessageEditEntity;
+import net.dv8tion.jda.api.entities.Message;
 
 import java.sql.*;
 import java.time.Instant;
@@ -38,6 +40,17 @@ public class MessageEditRepository extends AbstractRepository<MessageEditEntity,
 
             ps.executeUpdate();
         }
+    }
+
+    public void insertEdit(MessageEditEntity edit, Message sourceMessage) throws Exception {
+        if (edit == null) {
+            return;
+        }
+        String content = edit.content;
+        if ((content == null || content.isBlank()) && sourceMessage != null) {
+            content = MessageHandler.toMessageEntity(sourceMessage).content;
+        }
+        insertEdit(new MessageEditEntity(edit.messageId, edit.revision, content, edit.editedAt));
     }
 
     public List<MessageEditEntity> findByMessageId(long messageId) throws Exception {

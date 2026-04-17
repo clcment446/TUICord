@@ -101,6 +101,9 @@ dependencies {
     // The kotlin.jvm plugin auto-adds kotlin-stdlib at the plugin
     // version (1.9.22).  kotlin-stdlib-jdk8 was merged into
     // kotlin-stdlib in 1.8, so it is intentionally omitted.
+
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
 }
 
 // ── shadow (fat) JAR ───────────────────────────────────────────

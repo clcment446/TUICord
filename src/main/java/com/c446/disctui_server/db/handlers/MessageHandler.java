@@ -4,6 +4,10 @@ import com.c446.db.model.MessageEntity;
 import com.c446.db.model.MessageEditEntity;
 import com.c446.db.repositories.MessageEditRepository;
 import com.c446.db.repositories.MessageRepository;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.events.message.MessageDeleteEvent;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.events.message.MessageUpdateEvent;
@@ -35,14 +39,8 @@ public class MessageHandler extends ListenerAdapter {
         if (event.getAuthor().isBot()) return;
 
         try {
-            var id = event.getMessageIdLong();
-            var channelId = event.getChannel().getIdLong();
-            var authorId = event.getAuthor().getIdLong();
-            var content = event.getMessage().getContentRaw();
-            var deleted = false;
-            var createdAt = event.getMessage().getTimeCreated().toInstant();
-
-            MessageEntity msg = new MessageEntity(id, channelId, authorId, content,deleted, createdAt);
+            MessageEntity msg = toMessageEntity(event.getMessage());
+            msg.deleted = false;
 
             msg.editedAt = null;
             msg.editCount=0;
@@ -65,7 +63,7 @@ public class MessageHandler extends ListenerAdapter {
             MessageEntity existing = messageRepo.findById(id).orElse(null);
             if (existing == null) return;
 
-            String newContent = event.getMessage().getContentRaw();
+            String newContent = toMessageEntity(event.getMessage()).content;
             String oldContent = existing.content;
 
             // NO-OP GUARD (Discord sometimes triggers fake updates)
@@ -81,8 +79,7 @@ public class MessageHandler extends ListenerAdapter {
             // 1. WRITE HISTORY FIRST (append-only guarantee)
 
             MessageEditEntity edit = new MessageEditEntity(id, nextRevision, oldContent, editTime);
-
-            editRepo.insertEdit(edit);
+            editRepo.insertEdit(edit, event.getMessage());
 
             // 2. UPDATE CURRENT STATE
             existing.content = newContent;
@@ -114,5 +111,65 @@ public class MessageHandler extends ListenerAdapter {
         } catch (Exception e) {
             LOG.error("Failed to handle message delete {}", event.getMessageId(), e);
         }
+    }
+
+    public static MessageEntity toMessageEntity(@NotNull Message message) {
+        JsonObject content = new JsonObject();
+        content.addProperty("raw", message.getContentRaw());
+
+        JsonArray embeds = new JsonArray();
+        for (MessageEmbed embed : message.getEmbeds()) {
+            JsonObject embedJson = new JsonObject();
+            embedJson.addProperty("title", embed.getTitle());
+            embedJson.addProperty("description", embed.getDescription());
+            embedJson.addProperty("url", embed.getUrl());
+
+            if (embed.getAuthor() != null) {
+                JsonObject author = new JsonObject();
+                author.addProperty("name", embed.getAuthor().getName());
+                author.addProperty("url", embed.getAuthor().getUrl());
+                author.addProperty("iconUrl", embed.getAuthor().getIconUrl());
+                embedJson.add("author", author);
+            }
+
+            JsonArray fields = new JsonArray();
+            for (MessageEmbed.Field field : embed.getFields()) {
+                JsonObject fieldJson = new JsonObject();
+                fieldJson.addProperty("name", field.getName());
+                fieldJson.addProperty("value", field.getValue());
+                fieldJson.addProperty("inline", field.isInline());
+                fields.add(fieldJson);
+            }
+            embedJson.add("fields", fields);
+
+            embeds.add(embedJson);
+        }
+        content.add("embeds", embeds);
+
+        JsonArray attachments = new JsonArray();
+        for (Message.Attachment attachment : message.getAttachments()) {
+            JsonObject attachmentJson = new JsonObject();
+            attachmentJson.addProperty("id", attachment.getIdLong());
+            attachmentJson.addProperty("filename", attachment.getFileName());
+            attachmentJson.addProperty("url", attachment.getUrl());
+            attachmentJson.addProperty("proxyUrl", attachment.getProxyUrl());
+            attachmentJson.addProperty("contentType", attachment.getContentType());
+            attachmentJson.addProperty("image", attachment.isImage());
+            attachments.add(attachmentJson);
+        }
+        content.add("attachments", attachments);
+
+        MessageEntity entity = new MessageEntity(
+                message.getIdLong(),
+                message.getChannel().getIdLong(),
+                message.getAuthor().getIdLong(),
+                content.toString(),
+                false,
+                message.getTimeCreated().toInstant()
+        );
+        if (message.getTimeEdited() != null) {
+            entity.editedAt = message.getTimeEdited().toInstant();
+        }
+        return entity;
     }
 }
