@@ -61,6 +61,6 @@ class TuiCommandRouterTest {
         assertTrue(result.handled());
         assertNotNull(result.status());
         assertTrue(result.status().contains("Up/Down"));
+        assertTrue(result.status().contains("Result mode"));
     }
 }
-

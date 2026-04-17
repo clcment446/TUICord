@@ -1,6 +1,7 @@
 package com.c446.disctui_client;
 
 import com.c446.disctui_server.api.ChannelUpdatePacket;
+import org.jline.reader.Binding;
 import org.jline.keymap.KeyMap;
 import org.jline.reader.Candidate;
 import org.jline.reader.LineReader;
@@ -11,6 +12,7 @@ import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -39,12 +41,10 @@ public class ConsoleTerminalRenderer implements TerminalRenderer {
             lineReader.getWidgets().put("nav-right", () -> submitSyntheticCommand(lineReader, "/nav right"));
             lineReader.getKeyMaps().values()
                     .forEach(keyMap -> {
+                        reduceAmbiguousTimeout(keyMap);
                         keyMap.bind(new Reference("emoji-picker"), KeyMap.ctrl('E'));
                         keyMap.bind(new Reference("emoji-picker"), "\u001be");
-                        keyMap.bind(new Reference("nav-up"), "\u001b[A");
-                        keyMap.bind(new Reference("nav-down"), "\u001b[B");
-                        keyMap.bind(new Reference("nav-right"), "\u001b[C");
-                        keyMap.bind(new Reference("nav-left"), "\u001b[D");
+                        bindArrowKeys(keyMap);
                     });
 
             printInfo("Emoji picker: press Ctrl+E to insert emojis.");
@@ -108,5 +108,24 @@ public class ConsoleTerminalRenderer implements TerminalRenderer {
         lineReader.callWidget(LineReader.ACCEPT_LINE);
         return true;
     }
-}
 
+    private void bindArrowKeys(KeyMap<Binding> keyMap) {
+        keyMap.bind(new Reference("nav-up"), "\u001b[A");
+        keyMap.bind(new Reference("nav-down"), "\u001b[B");
+        keyMap.bind(new Reference("nav-right"), "\u001b[C");
+        keyMap.bind(new Reference("nav-left"), "\u001b[D");
+
+        keyMap.bind(new Reference("nav-up"), "\u001bOA");
+        keyMap.bind(new Reference("nav-down"), "\u001bOB");
+        keyMap.bind(new Reference("nav-right"), "\u001bOC");
+        keyMap.bind(new Reference("nav-left"), "\u001bOD");
+    }
+
+    private void reduceAmbiguousTimeout(KeyMap<?> keyMap) {
+        try {
+            Method method = keyMap.getClass().getMethod("setAmbiguousTimeout", long.class);
+            method.invoke(keyMap, 10L);
+        } catch (Exception ignored) {
+        }
+    }
+}

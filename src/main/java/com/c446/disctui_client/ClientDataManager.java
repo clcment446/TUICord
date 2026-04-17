@@ -47,6 +47,9 @@ public class ClientDataManager {
     private volatile int guildScrollOffset;
     private volatile int channelScrollOffset;
     private volatile int chatScrollOffset;
+    private volatile boolean resultMode;
+    private volatile List<String> commandResultLines = List.of();
+    private volatile int resultScrollOffset;
 
     public void applyGuildUpdate(GuildUpdatePacket guild) {
         if (guild == null || guild.guildId() == null) {
@@ -333,6 +336,10 @@ public class ClientDataManager {
     }
 
     public void navigateUp() {
+        if (resultMode) {
+            scrollResult(-1);
+            return;
+        }
         switch (frameFocus) {
             case GUILDS -> navigateGuild(-1);
             case CHANNELS -> navigateChannel(-1);
@@ -341,6 +348,10 @@ public class ClientDataManager {
     }
 
     public void navigateDown() {
+        if (resultMode) {
+            scrollResult(1);
+            return;
+        }
         switch (frameFocus) {
             case GUILDS -> navigateGuild(1);
             case CHANNELS -> navigateChannel(1);
@@ -354,6 +365,44 @@ public class ClientDataManager {
 
     public String getStatus() {
         return uiStatus == null ? "" : uiStatus;
+    }
+
+    public void showCommandResult(String result) {
+        if (result == null || result.isBlank()) {
+            clearCommandResult();
+            return;
+        }
+        commandResultLines = result.lines().toList();
+        if (commandResultLines.isEmpty()) {
+            commandResultLines = List.of(result);
+        }
+        resultScrollOffset = 0;
+        resultMode = true;
+        frameFocus = FrameFocus.CHAT;
+    }
+
+    public void clearCommandResult() {
+        commandResultLines = List.of();
+        resultScrollOffset = 0;
+        resultMode = false;
+    }
+
+    public boolean isResultMode() {
+        return resultMode;
+    }
+
+    public List<String> getVisibleResultLines(int maxRows) {
+        if (maxRows <= 0 || commandResultLines.isEmpty()) {
+            return List.of();
+        }
+
+        int maxOffset = Math.max(0, commandResultLines.size() - maxRows);
+        int offset = Math.min(Math.max(0, resultScrollOffset), maxOffset);
+        resultScrollOffset = offset;
+
+        int start = offset;
+        int end = Math.min(commandResultLines.size(), start + maxRows);
+        return new ArrayList<>(commandResultLines.subList(start, end));
     }
 
     public int getGuildCount() {
@@ -545,6 +594,10 @@ public class ClientDataManager {
         chatScrollOffset = Math.max(0, chatScrollOffset + delta);
     }
 
+    private void scrollResult(int delta) {
+        resultScrollOffset = Math.max(0, resultScrollOffset + delta);
+    }
+
     private <T> List<T> viewport(List<T> all, int rows, int offset, java.util.function.IntConsumer offsetWriter) {
         if (rows <= 0 || all.isEmpty()) {
             return List.of();
@@ -575,4 +628,3 @@ public class ClientDataManager {
         return guildId + ":" + userId;
     }
 }
-

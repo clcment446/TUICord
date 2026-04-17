@@ -36,5 +36,27 @@ class AnsiTuiRendererTest {
         String output = captured.toString(StandardCharsets.UTF_8);
         assertTrue(output.contains("\u001b[38;2;255;90;90m<deleted>\u001b[0m"));
     }
-}
 
+    @Test
+    void renderShowsResultModeWithScrollableCommandOutput() {
+        ClientDataManager state = new ClientDataManager();
+        state.showCommandResult("result-line-1\nresult-line-2\nresult-line-3");
+        state.navigateDown();
+
+        AnsiTuiRenderer renderer = new AnsiTuiRenderer();
+
+        PrintStream previous = System.out;
+        ByteArrayOutputStream captured = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(captured, true, StandardCharsets.UTF_8));
+        try {
+            renderer.render(state, "", 100, 16);
+        } finally {
+            System.setOut(previous);
+        }
+
+        String output = captured.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("Result mode"));
+        assertTrue(output.contains("result-line-2"));
+        assertTrue(output.contains("result-line-3"));
+    }
+}

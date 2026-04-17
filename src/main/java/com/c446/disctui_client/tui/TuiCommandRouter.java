@@ -115,6 +115,7 @@ public class TuiCommandRouter {
                 "Keybinds:",
                 "  Up/Down arrows    navigate in focused pane",
                 "  Left/Right arrows switch focus between guilds/channels/chat",
+                "  In Result mode: Up/Down scroll full command output",
                 "  Ctrl+E / Alt+E    insert emoji",
                 "Commands mirror navigation: /goto, /channel, /dms, /collapse");
     }
@@ -139,4 +140,3 @@ public class TuiCommandRouter {
         return sb.toString().trim();
     }
 }
-
