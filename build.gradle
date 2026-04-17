@@ -35,7 +35,22 @@ tasks.withType(JavaCompile).configureEach {
 
 // ── entry point ────────────────────────────────────────────────
 application {
-    mainClass.set('bot.DiscordBot')
+    mainClass.set('com.c446.disctui_server.DiscordBot')
+}
+
+tasks.register('server', JavaExec) {
+    group = 'application'
+    description = 'Runs the TUICord backend server (DiscordBot).'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass.set('com.c446.disctui_server.DiscordBot')
+}
+
+tasks.register('client', JavaExec) {
+    group = 'application'
+    description = 'Runs the TUICord terminal client (Master).'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass.set('com.c446.disctui_client.Master')
+    standardInput = System.in
 }
 
 // ── repositories ───────────────────────────────────────────────
@@ -61,6 +76,8 @@ dependencies {
     // Legacy used net.dv8tion:JDA:6.0.0-rc.3 which was a pre-release
     // under the old group.  If you need that exact RC, swap back.
     implementation 'net.dv8tion:JDA:6.3.0'
+
+    implementation 'org.mariadb.jdbc:mariadb-java-client:3.5.6' // Or latest version
 
     // Chewtils – utility layer the legacy bot depended on.
     // Pulled from chew.pro maven repo above.
@@ -93,6 +110,7 @@ dependencies {
     // ─── Config ───────────────────────────────────────────────
     // Source: https://mvnrepository.com/artifact/io.github.cdimascio/dotenv-java
     implementation("io.github.cdimascio:dotenv-java:3.2.0")
+    implementation("org.jline:jline:3.30.6")
 
     // Source: https://mvnrepository.com/artifact/com.github.ben-manes.caffeine/caffeine
     implementation("com.github.ben-manes.caffeine:caffeine:3.2.3")
@@ -101,6 +119,11 @@ dependencies {
     // The kotlin.jvm plugin auto-adds kotlin-stdlib at the plugin
     // version (1.9.22).  kotlin-stdlib-jdk8 was merged into
     // kotlin-stdlib in 1.8, so it is intentionally omitted.
+
+    // ─── Tests ────────────────────────────────────────────────
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
 }
 
 // ── shadow (fat) JAR ───────────────────────────────────────────

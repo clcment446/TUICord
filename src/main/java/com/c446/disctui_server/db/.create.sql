@@ -15,10 +15,12 @@
 --     - Minimal guild/channel/user identity needed to make messages readable
 -- =============================================================================
 
+CREATE USER IF NOT EXISTS 'laptop-admin'@'%'
+IDENTIFIED WITH caching_sha2_password BY 'change_in_prod';
+
 CREATE DATABASE IF NOT EXISTS tuicord
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
-
 USE tuicord;
 
 -- =============================================================================
@@ -140,7 +142,7 @@ CREATE TABLE IF NOT EXISTS guild_member_roles (
     -- Idempotency: prevent duplicate open assignments for the same (user, guild, role).
     -- A new assignment is only valid if no row exists with removed_at IS NULL.
     -- Enforced in application logic; this index supports the lookup efficiently.
-    INDEX idx_gmr_open_assignment   (user_id, guild_id, role_id, removed_at)
+    INDEX idx_gmr_open_assignment (user_id, guild_id, role_id, removed_at)
 ) ENGINE=InnoDB;
 
 
@@ -328,3 +330,6 @@ VALUES
     (2, 'Add users, guild_members, guild_member_roles, roles, role_permissions'),
     (3, 'Add message_edits and edit_count'),
     (4, 'Remove guild_members and role_permissions; guild_member_roles becomes historical log; slim guilds/channels/users/roles to identity-only');
+
+GRANT ALL PRIVILEGES ON tuicord.* TO 'laptop-admin'@'%';
+FLUSH PRIVILEGES;

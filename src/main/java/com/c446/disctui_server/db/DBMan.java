@@ -1,51 +1,50 @@
-package com.c446.db;
+package com.c446.disctui_server.db;
 
-import com.c446.Config;
+import com.c446.disctui_server.Config;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import net.dv8tion.jda.api.entities.Guild;
 
 import java.sql.Connection;
 import java.sql.SQLException;
 
 public class DBMan {
-    private static final HikariDataSource dataSource;
-
-    static {
-        HikariConfig config = new HikariConfig();
-
-        // Construct JDBC URL (Assuming MariaDB/MySQL based on your Config ports)
-        String jdbcUrl = String.format("jdbc:mariadb://%s:%s/%s",
-                Config.DB_HOST,
-                Config.DB_PORT,
-                Config.DB_NAME);
-
-        config.setJdbcUrl(jdbcUrl);
-        config.setUsername(Config.DB_USER);
-        config.setPassword(Config.DB_PASS);
-
-        // --- Hikari Optimization Settings ---
-        config.addDataSourceProperty("cachePrepStmts", "true");
-        config.addDataSourceProperty("prepStmtCacheSize", "250");
-        config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
-        config.addDataSourceProperty("useServerPrepStmts", "true");
-
-        // Pool Settings
-        config.setMaximumPoolSize(10);
-        config.setMinimumIdle(2);
-        config.setIdleTimeout(600000); // 10 minutes
-        config.setConnectionTimeout(30000); // 30 seconds
-
-        // Initialize the source
-        dataSource = new HikariDataSource(config);
-    }
+    private static HikariDataSource dataSource;
 
     /**
      * @return A connection from the pool.
      * Remember to use try-with-resources to return it to the pool!
      */
-    public static Connection getConnection() throws SQLException {
+    public static synchronized Connection getConnection() throws SQLException {
+        if (dataSource == null) {
+            initPool();
+        }
+        assert dataSource != null;
         return dataSource.getConnection();
+    }
+
+    private static void initPool() {
+        try {
+            HikariConfig config = new HikariConfig();
+            String jdbcUrl = String.format("jdbc:mysql://%s:%s/%s",
+                    Config.DB_HOST, Config.DB_PORT, Config.DB_NAME);
+
+            config.setJdbcUrl(jdbcUrl);
+            config.setUsername(Config.DB_USER);
+            config.setPassword(Config.DB_PASS);
+
+            // Important: Don't let a slow Docker start kill the app
+            config.setInitializationFailTimeout(1000);
+            config.setConnectionTimeout(2500);
+
+            // Critical for MySQL 8 compatibility
+            config.addDataSourceProperty("allowPublicKeyRetrieval", "true");
+            config.addDataSourceProperty("useSSL", "false");
+            config.setMaximumPoolSize(10);
+
+            dataSource = new HikariDataSource(config);
+        } catch (Exception e) {
+            throw new RuntimeException("Could not initialize Database Pool!", e);
+        }
     }
 
     public static void shutdown() {

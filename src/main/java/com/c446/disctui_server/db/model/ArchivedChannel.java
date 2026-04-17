@@ -1,4 +1,4 @@
-package com.c446.db.model;
+package com.c446.disctui_server.db.model;
 
 import net.dv8tion.jda.api.entities.channel.ChannelType;
 

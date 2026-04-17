@@ -1,4 +1,4 @@
-package com.c446.db;
+package com.c446.disctui_server.db;
 
 import java.sql.Connection;
 

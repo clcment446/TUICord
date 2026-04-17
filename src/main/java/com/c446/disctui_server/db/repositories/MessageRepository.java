@@ -1,7 +1,7 @@
-package com.c446.db.repositories;
+package com.c446.disctui_server.db.repositories;
 
-import com.c446.db.AbstractRepository;
-import com.c446.db.model.MessageEntity;
+import com.c446.disctui_server.db.AbstractRepository;
+import com.c446.disctui_server.db.model.MessageEntity;
 
 import java.sql.*;
 import java.time.Instant;

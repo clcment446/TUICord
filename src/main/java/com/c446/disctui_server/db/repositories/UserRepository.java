@@ -1,8 +1,8 @@
-package com.c446.db.repositories;
+package com.c446.disctui_server.db.repositories;
 
-import com.c446.db.AbstractRepository;
+import com.c446.disctui_server.db.AbstractRepository;
 import net.dv8tion.jda.api.entities.User;
-import com.c446.DiscordBot;
+import com.c446.disctui_server.DiscordBot;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;

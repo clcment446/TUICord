@@ -1,4 +1,4 @@
-package com.c446;
+package com.c446.disctui_server;
 
 import io.github.cdimascio.dotenv.Dotenv;
 import io.github.cdimascio.dotenv.DotenvException;
@@ -31,6 +31,10 @@ public class Config {
 
     // ─── API Settings ────────────────────────────────────────────
     public static final int API_PORT = Integer.parseInt(get("API_PORT", "46092"));
+
+    // ─── History Crawl Settings ──────────────────────────────────
+    public static final int MESSAGE_BACKFILL_LIMIT = Integer.parseInt(get("MESSAGE_BACKFILL_LIMIT", "500"));
+    public static final int MESSAGE_BACKFILL_INTERVAL_SECONDS = Integer.parseInt(get("MESSAGE_BACKFILL_INTERVAL_SECONDS", "300"));
 
     /**
      * Gets a variable or returns a default value.
